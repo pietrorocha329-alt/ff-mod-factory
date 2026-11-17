@@ -1,0 +1,43 @@
+name: Build Free Fire Mod
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Setup Android NDK
+      uses: nttld/setup-ndk@v1
+      with:
+        ndk-version: r25b
+
+    - name: Compile C++ Menu
+      run: |
+        mkdir -p build
+        cd build
+        cmake .. -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake -DANDROID_ABI=armeabi-v7a -DANDROID_PLATFORM=android-24
+        make
+
+    - name: Inject into APK
+      run: |
+        # Descompacta o split config
+        unzip -o split_config.armeabi_v7a.apk -d work_split
+        # Copia a lib compilada para dentro do jogo
+        cp build/libffpay.so work_split/lib/armeabi-v7a/libffpay.so
+        # Injeta a dependencia na lib principal do jogo
+        patchelf --add-needed libffpay.so work_split/lib/armeabi-v7a/libil2cpp.so
+        # Empacota de novo
+        cd work_split
+        zip -r -X ../modded_split.apk .
+        cd ..
+
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: modded-apk
+        path: modded_split.apk
